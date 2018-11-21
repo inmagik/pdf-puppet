@@ -1,0 +1,15 @@
+{
+  "name": "pdf-puppet",
+  "version": "1.0.0",
+  "description": "A web page to pdf generator",
+  "main": "index.js",
+  "author": "Mauro Bianchi",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.16.4",
+    "puppeteer": "^1.10.0"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+}
