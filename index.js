@@ -54,7 +54,11 @@ const asyncMiddleware = fn =>
 
   await page.close();
   await browser.close();
-  res.download(path, pdfFileName);
+  res.download(
+    path,
+    pdfFileName,
+    ()=>{fs.unlinkSync(path);}
+  )
 }
 
 app.get('/', asyncMiddleware(urlToPdf));
