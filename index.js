@@ -1,7 +1,15 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
+const fs = require('fs');
+
+
 
 var app = express();
+
+var output_folder = __dirname + '/outputs'
+if (!fs.existsSync(output_folder)){
+    fs.mkdirSync(output_folder);
+}
 
 const asyncMiddleware = fn =>
   (req, res, next) => {
@@ -27,20 +35,18 @@ const asyncMiddleware = fn =>
   })
   const page = await browser.newPage()
   try {
-    await page.goto(url, {waitUntil: 'networkidle2'})
+    const pageResp = await page.goto(url, {waitUntil: 'networkidle2'})
   } catch(err) {
     res.statusCode = 400;
     res.send(err)
     return
   }
 
-  const status = page.headers.status
-  console.log("page status", status)
-
   const title = await page.title()
   const pdfFileName = fileName ? fileName : title.toLowerCase().replace(/ /g, '_') + '.pdf'
+  const path = output_folder + '/' + pdfFileName
   await page.pdf({
-    path: pdfFileName,
+    path,
     width,
     height,
     printBackground: !!printBackground
@@ -48,7 +54,7 @@ const asyncMiddleware = fn =>
 
   await page.close();
   await browser.close();
-  res.download(__dirname + '/' + pdfFileName, pdfFileName);
+  res.download(path, pdfFileName);
 }
 
 app.get('/', asyncMiddleware(urlToPdf));
