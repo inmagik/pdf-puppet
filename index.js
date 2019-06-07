@@ -1,14 +1,15 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
-
-
+var bodyParser = require('body-parser')
 
 var app = express();
 
+app.use(bodyParser.json())
+
 var output_folder = __dirname + '/outputs'
-if (!fs.existsSync(output_folder)){
-    fs.mkdirSync(output_folder);
+if (!fs.existsSync(output_folder)) {
+  fs.mkdirSync(output_folder);
 }
 
 const asyncMiddleware = fn =>
@@ -17,49 +18,74 @@ const asyncMiddleware = fn =>
       .catch(next);
   };
 
-
-async function getPage(url, options={}){
+async function getPage(url, options = {}) {
   const browser = await puppeteer.launch({
     args: ['--no-sandbox'],
     userDataDir: './.pdfcache',
+    defaultViewport: null,
     // dumpio: true
   })
   const page = await browser.newPage()
-  if(options.viewport){
+
+  if (options.viewport) {
     await page.setViewport({
       width: options.viewport.width,
       height: options.viewport.height,
     })
   }
-  if(options.headers){
+
+  if (options.headers) {
     await page.setExtraHTTPHeaders(options.headers)
   }
 
-  await page.goto(url, { waitUntil: 'networkidle2'})
+  await page.goto(url, { waitUntil: 'networkidle0' })
+
+  if (options.localStorage) {
+    await page.evaluate(ls => {
+      for (let k in ls) {
+        localStorage.setItem(k, ls[k])
+      }
+    }, options.localStorage)
+    await page.goto(url, { waitUntil: 'networkidle0' })
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 1000))
+
   const title = await page.title()
-  return { page:page, browser:browser, title:title }
+  return { page: page, browser: browser, title: title }
 }
 
-async function urlToPdf(req, res){
+async function urlToPdf(req, res) {
 
-  const url = req.query.url
-  if(!url){
+  const {
+    url,
+    width,
+    height,
+    printBackground = true,
+    fileName,
+    format = 'A4',
+    landscape,
+    displayHeaderFooter,
+    ...options
+  } = req.body
+
+  if (!url) {
     res.statusCode = 400;
     res.send("No url specified!")
     return
   }
-  const {
-    width, height,
-    printBackground=true,
-    fileName, format,
-    landscape,
-    displayHeaderFooter
-  } = req.query
 
-  var result;
+  let result;
   try {
-    result = await getPage(url, { headers: { authorization: req.headers['authorization']}, })
-  } catch(err) {
+    result = await getPage(url, {
+      ...options,
+      headers: req.headers && req.headers['authorization']
+        ?
+        { authorization: req.headers['authorization'] }
+        :
+        undefined
+    })
+  } catch (err) {
     console.error(err)
     res.statusCode = 404;
     res.send(err)
@@ -68,13 +94,33 @@ async function urlToPdf(req, res){
 
   const { page, title, browser } = result
 
+  if (width && height) {
+    await page.addStyleTag({
+      content: `
+        @page {
+          size: ${width} ${height};
+        }
+      `
+    })
+  }
+  else if (format) {
+    await page.addStyleTag({
+      content: `
+        @page {
+          size: ${format};
+        }
+      `
+    })
+  }
+
+
   const pdfFileName = fileName ? fileName : (title || 'No title').toLowerCase().replace(/ /g, '_') + '.pdf'
   const path = output_folder + '/' + pdfFileName
   await page.pdf({
     path,
-    width,
-    height,
-    format,
+    width: width,
+    height: height,
+    format: format,
     printBackground: !!printBackground,
     landscape: !!landscape,
     displayHeaderFooter: !!displayHeaderFooter,
@@ -92,30 +138,33 @@ async function urlToPdf(req, res){
   )
 }
 
-async function urlToScreenshot(req, res){
-  const url = req.query.url
-  if(!url){
+async function urlToScreenshot(req, res) {
+
+  const {
+    url,
+    fullPage = true,
+    viewportWidth = 1440,
+    viewportHeight = 900,
+  } = req.body
+
+  if (!url) {
     res.statusCode = 400;
     res.send("No url specified!")
     return
   }
-  const {
-    fileName,
-    fullPage=true,
-    viewportWidth=1440,
-    viewportHeight=900,
-  } = req.query
 
-  let result
+  let result;
   try {
-    result = await getPage(
-      url,
-      {
-        headers: { authorization: req.headers['authorization'] },
-        viewport: { width: viewportWidth, height: viewportHeight},
-      }
-    )
-  } catch(err) {
+    result = await getPage(url, {
+      ...options,
+      viewport: { width: viewportWidth, height: viewportHeight },
+      headers: req.headers && req.headers['authorization']
+        ?
+        { authorization: req.headers['authorization'] }
+        :
+        undefined
+    })
+  } catch (err) {
     console.error(err)
     res.statusCode = 404;
     res.send(err)
@@ -138,14 +187,14 @@ async function urlToScreenshot(req, res){
   res.download(
     path,
     pdfFileName,
-    ()=>{fs.unlinkSync(path);}
+    () => { fs.unlinkSync(path); }
   )
 }
 
-app.get('/', asyncMiddleware(urlToPdf));
-app.get('/screenshot/', asyncMiddleware(urlToScreenshot));
+app.post('/', asyncMiddleware(urlToPdf));
+app.post('/screenshot/', asyncMiddleware(urlToScreenshot));
 
 
-app.listen(3000, function () {
-  console.log('pdf-puppet listening on port 3000!');
+app.listen(3040, function () {
+  console.log('pdf-puppet listening on port 3040!');
 });
