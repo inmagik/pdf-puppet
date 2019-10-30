@@ -113,8 +113,10 @@ async function urlToPdf(req, res) {
     })
   }
 
+  
 
   const pdfFileName = fileName ? fileName : (title || 'No title').toLowerCase().replace(/ /g, '_') + '.pdf'
+
   const path = output_folder + '/' + pdfFileName
   await page.pdf({
     path,
@@ -145,6 +147,7 @@ async function urlToScreenshot(req, res) {
     fullPage = true,
     viewportWidth = 1440,
     viewportHeight = 900,
+    ...options
   } = req.body
 
   if (!url) {
