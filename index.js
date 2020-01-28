@@ -12,12 +12,6 @@ if (!fs.existsSync(output_folder)) {
   fs.mkdirSync(output_folder);
 }
 
-const asyncMiddleware = fn =>
-  (req, res, next) => {
-    Promise.resolve(fn(req, res, next))
-      .catch(next);
-  };
-
 async function getPage(url, options = {}) {
   const browser = await puppeteer.launch({
     args: ['--no-sandbox'],
@@ -49,7 +43,14 @@ async function getPage(url, options = {}) {
     await page.goto(url, { waitUntil: 'networkidle0' })
   }
 
-  await new Promise(resolve => setTimeout(resolve, 1000))
+  let timeout = options.timeout
+  // When no tiemout or invalid use default 1 second
+  if (timeout === null || timeout === undefined || Number(timeout) !== timeout) {
+    timeout = 1000
+  }
+  if (timeout > 0) {
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
 
   const title = await page.title()
   return { page: page, browser: browser, title: title }
@@ -113,7 +114,7 @@ async function urlToPdf(req, res) {
     })
   }
 
-  
+
 
   const pdfFileName = fileName ? fileName : (title || 'No title').toLowerCase().replace(/ /g, '_') + '.pdf'
 
@@ -194,8 +195,8 @@ async function urlToScreenshot(req, res) {
   )
 }
 
-app.post('/', asyncMiddleware(urlToPdf));
-app.post('/screenshot/', asyncMiddleware(urlToScreenshot));
+app.post('/', urlToPdf);
+app.post('/screenshot/', urlToScreenshot);
 
 
 app.listen(3040, function () {
