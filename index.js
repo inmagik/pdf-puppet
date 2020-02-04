@@ -67,6 +67,7 @@ async function urlToPdf(req, res) {
     format = 'A4',
     landscape,
     displayHeaderFooter,
+    margin,
     ...options
   } = req.body
 
@@ -127,6 +128,7 @@ async function urlToPdf(req, res) {
     printBackground: !!printBackground,
     landscape: !!landscape,
     displayHeaderFooter: !!displayHeaderFooter,
+    margin
   });
 
   await page.close();
