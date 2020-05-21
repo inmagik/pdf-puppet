@@ -1,6 +1,8 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
+const packageJson = require('./package.json')
+
 var bodyParser = require('body-parser')
 
 var app = express();
@@ -12,13 +14,7 @@ if (!fs.existsSync(output_folder)) {
   fs.mkdirSync(output_folder);
 }
 
-async function getPage(url, options = {}) {
-  const browser = await puppeteer.launch({
-    args: ['--no-sandbox'],
-    userDataDir: './.pdfcache',
-    defaultViewport: null,
-    // dumpio: true
-  })
+async function getPage(browser, url, options = {}) {
   const page = await browser.newPage()
 
   if (options.viewport) {
@@ -53,148 +49,171 @@ async function getPage(url, options = {}) {
   }
 
   const title = await page.title()
-  return { page: page, browser: browser, title: title }
+  return { page: page, title: title }
 }
 
 async function urlToPdf(req, res) {
-
-  const {
-    url,
-    width,
-    height,
-    printBackground = true,
-    fileName,
-    format = 'A4',
-    landscape,
-    displayHeaderFooter,
-    margin,
-    ...options
-  } = req.body
-
-  if (!url) {
-    res.statusCode = 400;
-    res.send("No url specified!")
-    return
-  }
-
-  let result;
+  let browser = null
   try {
-    result = await getPage(url, {
-      ...options,
-      headers: req.headers && req.headers['authorization']
-        ?
-        { authorization: req.headers['authorization'] }
-        :
-        undefined
-    })
-  } catch (err) {
-    console.error(err)
-    res.statusCode = 404;
-    res.send(err)
-    return
-  }
-
-  const { page, title, browser } = result
-
-  if (width && height) {
-    await page.addStyleTag({
-      content: `
-        @page {
-          size: ${width} ${height};
-        }
-      `
-    })
-  }
-  else if (format) {
-    await page.addStyleTag({
-      content: `
-        @page {
-          size: ${format};
-        }
-      `
-    })
-  }
-
-
-
-  const pdfFileName = fileName ? fileName : (title || 'No title').toLowerCase().replace(/ /g, '_') + '.pdf'
-
-  const path = output_folder + '/' + pdfFileName
-  await page.pdf({
-    path,
-    width: width,
-    height: height,
-    format: format,
-    printBackground: !!printBackground,
-    landscape: !!landscape,
-    displayHeaderFooter: !!displayHeaderFooter,
-    margin
-  });
-
-  await page.close();
-  await browser.close();
-
-  res.download(
-    path,
-    pdfFileName,
-    () => {
-      fs.unlinkSync(path);
+    const {
+      url,
+      width,
+      height,
+      printBackground = true,
+      fileName,
+      format = 'A4',
+      landscape,
+      displayHeaderFooter,
+      margin,
+      ...options
+    } = req.body
+  
+    if (!url) {
+      res.statusCode = 400;
+      res.send("No url specified!")
+      return
     }
-  )
+  
+    browser = await puppeteer.launch({
+      args: ['--no-sandbox'],
+      userDataDir: './.pdfcache',
+      defaultViewport: null,
+      // dumpio: true
+    })
+  
+    let result;
+    try {
+      result = await getPage(browser, url, {
+        ...options,
+        headers: req.headers && req.headers['authorization']
+          ?
+          { authorization: req.headers['authorization'] }
+          :
+          undefined
+      })
+    } catch (err) {
+      console.error(err)
+      res.statusCode = 404;
+      res.send(err)
+      return
+    }
+  
+    const { page, title } = result
+  
+    if (width && height) {
+      await page.addStyleTag({
+        content: `
+          @page {
+            size: ${width} ${height};
+          }
+        `
+      })
+    }
+    else if (format) {
+      await page.addStyleTag({
+        content: `
+          @page {
+            size: ${format};
+          }
+        `
+      })
+    }
+  
+  
+  
+    const pdfFileName = fileName ? fileName : (title || 'No title').toLowerCase().replace(/ /g, '_') + '.pdf'
+  
+    // const path = output_folder + '/' + pdfFileName
+    const myPdf = await page.pdf({
+      // path,
+      width: width,
+      height: height,
+      format: format,
+      printBackground: !!printBackground,
+      landscape: !!landscape,
+      displayHeaderFooter: !!displayHeaderFooter,
+      margin
+    });
+  
+    await page.close();
+    await browser.close();
+  
+    res.setHeader('Content-Length', myPdf.length)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename=${pdfFileName}`)
+    res.send(myPdf)
+  } finally {
+    if (browser)
+      await browser.close()
+  }
+
 }
 
 async function urlToScreenshot(req, res) {
-
-  const {
-    url,
-    fullPage = true,
-    viewportWidth = 1440,
-    viewportHeight = 900,
-    ...options
-  } = req.body
-
-  if (!url) {
-    res.statusCode = 400;
-    res.send("No url specified!")
-    return
-  }
-
-  let result;
+  let browser = null
   try {
-    result = await getPage(url, {
-      ...options,
-      viewport: { width: viewportWidth, height: viewportHeight },
-      headers: req.headers && req.headers['authorization']
-        ?
-        { authorization: req.headers['authorization'] }
-        :
-        undefined
+    const {
+      url,
+      fullPage = true,
+      viewportWidth = 1440,
+      viewportHeight = 900,
+      ...options
+    } = req.body
+  
+    if (!url) {
+      res.statusCode = 400;
+      res.send("No url specified!")
+      return
+    }
+  
+    browser = await puppeteer.launch({
+      args: ['--no-sandbox'],
+      userDataDir: './.pdfcache',
+      defaultViewport: null,
+      // dumpio: true
     })
-  } catch (err) {
-    console.error(err)
-    res.statusCode = 404;
-    res.send(err)
-    return
+  
+    let result;
+    try {
+      result = await getPage(browser, url, {
+        ...options,
+        viewport: { width: viewportWidth, height: viewportHeight },
+        headers: req.headers && req.headers['authorization']
+          ?
+          { authorization: req.headers['authorization'] }
+          :
+          undefined
+      })
+    } catch (err) {
+      console.error(err)
+      res.statusCode = 404;
+      res.send(err)
+      return
+    }
+  
+    const { page, title } = result
+  
+    // const pdfFileName = fileName ? fileName : title.toLowerCase().replace(/ /g, '_') + '.png'
+    const pdfFileName = url.replace(/\//g, '-') + ".png"
+    const path = output_folder + '/' + pdfFileName
+  
+    await page.screenshot({
+      path,
+      fullPage: !!fullPage,
+    });
+  
+    await page.close();
+    await browser.close();
+    res.download(
+      path,
+      pdfFileName,
+      () => { fs.unlinkSync(path); }
+    )
+  } finally {
+    if (browser) {
+      await browser.close()
+    }
   }
-
-  const { page, title, browser } = result
-
-  // const pdfFileName = fileName ? fileName : title.toLowerCase().replace(/ /g, '_') + '.png'
-  const pdfFileName = url.replace(/\//g, '-') + ".png"
-  const path = output_folder + '/' + pdfFileName
-
-  await page.screenshot({
-    path,
-    fullPage: !!fullPage,
-  });
-
-  await page.close();
-  await browser.close();
-  res.download(
-    path,
-    pdfFileName,
-    () => { fs.unlinkSync(path); }
-  )
 }
 
 app.post('/', urlToPdf);
@@ -203,4 +222,5 @@ app.post('/screenshot/', urlToScreenshot);
 
 app.listen(3040, function () {
   console.log('pdf-puppet listening on port 3040!');
-});
+  console.log('Running version ' + packageJson.version)
+})
