@@ -20,13 +20,13 @@ export async function openPage(url: string, options: PageOptions) {
         height: options.viewport.height
       })
     }
-  
+
     if (options.headers) {
       await page.setExtraHTTPHeaders(options.headers)
     }
-  
+
     await page.goto(url, { waitUntil: 'networkidle0' })
-  
+
     if (options.localStorage) {
       await page.evaluate(ls => {
         for (let k in ls) {
@@ -35,7 +35,7 @@ export async function openPage(url: string, options: PageOptions) {
       }, options.localStorage)
       await page.goto(url, { waitUntil: 'networkidle0' })
     }
-  
+
     let timeout = options.timeout
     // When no tiemout or invalid use default 1 second
     if (timeout === null || timeout === undefined || Number(timeout) !== timeout) {
@@ -44,10 +44,10 @@ export async function openPage(url: string, options: PageOptions) {
     if (timeout > 0) {
       await new Promise(resolve => setTimeout(resolve, 1000))
     }
-  
+
     return page
   } catch (e) {
-    page.close()
+    await page.close()
     throw e
   }
 }

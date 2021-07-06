@@ -35,7 +35,7 @@ async function openPage(url, options) {
         return page;
     }
     catch (e) {
-        page.close();
+        await page.close();
         throw e;
     }
 }
